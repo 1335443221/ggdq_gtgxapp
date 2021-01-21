@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.sl.gtgx.manager.dao.PatrolDao">
+
+	<select id="findPage" parameterType="java.util.Map" resultType="java.util.Map">
+		SELECT p.*,u.id uid,u.user_name,pp.name pname,pt.description type_name,pm.time_type time_name FROM patrol p
+		INNER JOIN `user` u on p.create_by=u.id
+		INNER JOIN patrol_point pp ON p.patrol_point_id=pp.id
+		left join patrol_type pt on p.type=pt.id
+		left join patrol_time pm on p.time_type=pm.id
+		where 1=1
+		<if test="type_id != null and type_id !=''">
+			and pt.id=#{type_id }
+		</if>
+		<if test="time_id != null and time_id !=''">
+			and pm.id=#{time_id }
+		</if>
+		order by create_at desc
+	</select>
+
+	<select id="patrol_type_list" parameterType="java.util.Map" resultType="java.util.Map">
+		SELECT * FROM  patrol_type pt
+	</select>
+
+	<select id="patrol_time_list" parameterType="java.util.Map" resultType="java.util.Map">
+		SELECT * FROM  patrol_time pm
+	</select>
+
+
+	<delete id="deletePatrolByPId" parameterType="Integer">
+	delete from patrol where patrol_point_id=#{id}
+	</delete>
+	
+	
+</mapper>

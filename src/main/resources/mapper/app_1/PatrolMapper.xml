@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sl.gtgx.app_1.dao.PatrolMapper">
+  <resultMap id="BaseResultMap" type="com.sl.gtgx.app_1.entity.Patrol">
+    <id column="id" jdbcType="INTEGER" property="id" />
+    <result column="patrol_point_id" jdbcType="INTEGER" property="patrolPointId" />
+    <result column="type" jdbcType="INTEGER" property="type" />
+    <result column="time_type" jdbcType="INTEGER" property="timeType" />
+    <result column="count" jdbcType="INTEGER" property="count" />
+    <result column="create_by" jdbcType="INTEGER" property="createBy" />
+    <result column="create_at" jdbcType="INTEGER" property="createAt" />
+    <result column="department_id" jdbcType="INTEGER" property="departmentId"/>
+  </resultMap>
+  <resultMap extends="BaseResultMap" id="ResultMapWithBLOBs" type="com.sl.gtgx.app_1.entity.Patrol">
+    <result column="content" jdbcType="LONGVARCHAR" property="content" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, patrol_point_id, `type`, time_type, `count`, create_by, create_at,department_id
+  </sql>
+  <sql id="Blob_Column_List">
+    content
+  </sql>
+  <select id="selectByPrimaryKey" parameterType="java.lang.Integer" resultMap="ResultMapWithBLOBs">
+    select 
+    <include refid="Base_Column_List" />
+    ,
+    <include refid="Blob_Column_List" />
+    from patrol
+    where id = #{id,jdbcType=INTEGER}
+  </select>
+
+  <select id="selectTimeTypes" parameterType="java.util.Map" resultType="java.lang.String">
+    select alais from patrol p
+    left join patrol_time pt on p.time_type=pt.id
+    where p.department_id=#{departmentId} and p.patrol_point_id=#{patrolPointId}
+  </select>
+
+  <select id="selectPatrols" parameterType="java.util.Map" resultType="java.util.Map">
+    SELECT distinct p.id, ptm.time, p.`count`,from_unixtime(p.create_at,'%Y-%m-%d %T') as create_at,
+    p.content,pp.number,pp.name,pt.description as type_name,pl.status,u.user_name as patrol_by,
+    pl.first_clock_at,pl.second_clock_at,ptm.alais,pl.third_clock_at,pl.fourth_clock_at
+    FROM `patrol` p LEFT JOIN patrol_point pp ON p.patrol_point_id = pp.id
+    left join patrol_time ptm on ptm.id = p.time_type
+    left join patrol_type pt on p.type=pt.id
+    left join `department` d on p.department_id=d.id
+    LEFT JOIN patrol_log pl ON p.id = pl.patrol_id and (
+    (pl.first_clock_at between #{startTime} and #{endTime}) or
+    (ptm.alais='weekly' and pl.first_clock_at between #{weekStart} and #{weekEnd}) or
+    (ptm.alais='monthly' and pl.first_clock_at between #{monthStart} and #{monthEnd}))
+    LEFT JOIN user u ON u.id = pl.patrol_by
+    WHERE p.create_at &lt;= #{endTime}
+    <if test="timeType!=0">
+      and (p.time_type = #{timeType} or p.time_type=5 or p.time_type=6)
+    </if>
+      <if test="departmentId != null and departmentId!=0">
+          and p.department_id=#{departmentId}
+      </if>
+      <if test="companyId != null and companyId!=0">
+          and d.company_id=#{companyId}
+      </if>
+    ORDER BY p.create_at DESC
+    LIMIT #{startNum},#{getNum}
+  </select>
+
+
+  <select id="selectPatrolCount" parameterType="java.util.Map" resultType="java.util.Map">
+    select
+    distinct p.id, ptm.time, p.`count`,from_unixtime(p.create_at,'%Y-%m-%d %T') as create_at,
+    p.content,pp.number,pp.name,pt.description as type_name,pl.status,u.user_name as patrol_by,
+    pl.first_clock_at,pl.second_clock_at
+    FROM `patrol` p LEFT JOIN patrol_point pp ON p.patrol_point_id = pp.id
+    left join patrol_time ptm on ptm.id = p.time_type
+    left join patrol_type pt on p.type=pt.id
+    left join `department` d on p.department_id=d.id
+    LEFT JOIN patrol_log pl ON p.id = pl.patrol_id and (
+    (pl.first_clock_at between #{startTime} and #{endTime}) or
+    (ptm.alais='weekly' and pl.first_clock_at between #{weekStart} and #{weekEnd}) or
+    (ptm.alais='monthly' and pl.first_clock_at between #{monthStart} and #{monthEnd}))
+    LEFT JOIN user u ON u.id = pl.patrol_by
+    WHERE p.create_at &lt;= #{endTime}
+    <if test="timeType!=0">
+      and (p.time_type = #{timeType} or p.time_type=5 or p.time_type=6)
+    </if>
+    <if test="departmentId != null and departmentId!=0">
+        and p.department_id=#{departmentId}
+    </if>
+      <if test="companyId != null and companyId!=0">
+          and d.company_id=#{companyId}
+      </if>
+  </select>
+
+  <select id="selectPatrolLog" parameterType="java.util.Map" resultType="java.util.Map">
+    select distinct
+    p.id AS id,
+    pt.description AS type_name,ptm.alais AS alais,
+    pp.NAME AS `name`,
+    u.login_name AS patrol_by,
+    (case when pl.second_clock_at is not null and pl.third_clock_at is null then pl.second_clock_at
+          when pl.third_clock_at is not null and pl.fourth_clock_at is null then pl.third_clock_at
+          when pl.fourth_clock_at is not null then pl.fourth_clock_at
+          else pl.first_clock_at end) as `time`,
+    c.cname as company_name,pl.status,
+    p.count,pl.first_clock_at,pl.second_clock_at,pl.third_clock_at,pl.fourth_clock_at
+    <!--IFNULL(pl.first_clock_at,pl.second_clock_at) as `time`-->
+    from patrol p
+    left join patrol_point pp on p.patrol_point_id=pp.id
+    left join patrol_type pt on p.type=pt.id
+    join patrol_log pl on p.id=pl.patrol_id
+    left join patrol_time ptm on ptm.id = p.time_type
+    left join `user` u on pl.patrol_by = u.id
+    left join `group` g on g.id = u.group_id
+    left join company c on u.company_id = c.id
+    where pl.status=2
+    <!--where `time` between #{startTime} and #{endTime}-->
+    <if test="uid !=null and uid!=0">
+      and u.id = #{uid}
+    </if>
+      <if test="params.company_id !=null and params.company_id !=0">
+          and c.id = #{params.company_id}
+      </if>
+      <if test="params.department_id !=null and params.department_id !=0">
+          and p.department_id = #{params.department_id}
+      </if>
+      <if test="params.group_id !=null and params.group_id !=0">
+          and g.id = #{params.group_id}
+      </if>
+      <if test="params.user_id !=null and params.user_id !=0">
+          and u.id = #{params.user_id}
+      </if>
+    order by `time`
+  </select>
+	
+  <!--TODO modify hlc on 2019-8-9 10:31:26 加入了括号, where () or ()-->		
+  <select id="selectPatrolByNumber" parameterType="java.util.Map" resultMap="BaseResultMap">
+    select distinct p.* from patrol p
+    left join patrol_point pp on  pp.id=p.patrol_point_id
+    left join patrol_log pl on p.id=pl.patrol_id
+    where pp.number=#{number} and (p.time_type=#{timeType} or p.time_type=5 or p.time_type=6)
+    and department_id=#{departmentId}
+  </select>
+
+    <select id="selectPatrolReport" parameterType="java.util.Map" resultType="java.util.Map">
+      select distinct p.id AS id,p.create_by as user_id,
+      u.login_name AS patrol_by,
+      pl.first_clock_at AS begin_at,
+      pl.second_clock_at AS end_at,
+      p.count AS `count`,
+      c.cname as company_name
+      FROM `patrol_log` pl
+      LEFT JOIN `patrol` p ON pl.patrol_id = p.id
+      LEFT JOIN `patrol_point` pp ON pp.id = p.patrol_point_id
+      LEFT JOIN `user` u ON u.id = pl.patrol_by
+      left join company c on u.company_id = c.id
+      left join `group` g on g.id = u.group_id
+      WHERE pl.first_clock_at between #{startTime} and #{endTime} and pl.status=2
+        <if test="params.company_id !=null and params.company_id !=0">
+            and c.id = #{params.company_id}
+        </if>
+        <if test="params.department_id !=null and params.department_id !=0">
+            and p.department_id = #{params.department_id}
+        </if>
+        <if test="params.group_id !=null and params.group_id !=0">
+            and g.id = #{params.group_id}
+        </if>
+        <if test="params.user_id !=null and params.user_id !=0">
+            and u.id = #{params.user_id}
+        </if>
+        <if test="type != null">
+            and p.type = #{type}
+        </if>
+        order by patrol_by,begin_at
+    </select>
+
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.Integer">
+    delete from patrol
+    where id = #{id,jdbcType=INTEGER}
+  </delete>
+  <insert id="insert" parameterType="com.sl.gtgx.app_1.entity.Patrol" useGeneratedKeys="true" keyProperty="id">
+    insert into patrol (id, patrol_point_id, `type`,
+      time_type, `count`, content,create_by,create_at,department_id)
+    values (#{id,jdbcType=INTEGER}, #{patrolPointId,jdbcType=INTEGER}, #{type,jdbcType=INTEGER},
+      #{timeType,jdbcType=INTEGER}, #{count,jdbcType=INTEGER}, #{content,jdbcType=LONGVARCHAR},
+            #{createBy,jdbcType=INTEGER}, unix_timestamp(now()),#{departmentId})
+  </insert>
+  <insert id="insertSelective" parameterType="com.sl.gtgx.app_1.entity.Patrol">
+    insert into patrol
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        id,
+      </if>
+      <if test="patrolPointId != null">
+        patrol_point_id,
+      </if>
+      <if test="type != null">
+        `type`,
+      </if>
+      <if test="timeType != null">
+        time_type,
+      </if>
+      <if test="count != null">
+        `count`,
+      </if>
+      <if test="createBy != null">
+        create_by,
+      </if>
+      <if test="createAt != null">
+        create_at,
+      </if>
+      <if test="content != null">
+        content,
+      </if>
+      <if test="departmentId!=null">
+        department_id,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        #{id,jdbcType=INTEGER},
+      </if>
+      <if test="patrolPointId != null">
+        #{patrolPointId,jdbcType=INTEGER},
+      </if>
+      <if test="type != null">
+        #{type,jdbcType=INTEGER},
+      </if>
+      <if test="timeType != null">
+        #{timeType,jdbcType=INTEGER},
+      </if>
+      <if test="count != null">
+        #{count,jdbcType=INTEGER},
+      </if>
+      <if test="createBy != null">
+        #{createBy,jdbcType=INTEGER},
+      </if>
+      <if test="createAt != null">
+        #{createAt,jdbcType=INTEGER},
+      </if>
+      <if test="content != null">
+        #{content,jdbcType=LONGVARCHAR},
+      </if>
+      <if test="department != null">
+        #{departmentId},
+      </if>
+    </trim>
+  </insert>
+  <update id="updateByPrimaryKeySelective" parameterType="com.sl.gtgx.app_1.entity.Patrol">
+    update patrol
+    <set>
+      <if test="patrolPointId != null">
+        patrol_point_id = #{patrolPointId,jdbcType=INTEGER},
+      </if>
+      <if test="type != null">
+        `type` = #{type,jdbcType=INTEGER},
+      </if>
+      <if test="timeType != null">
+        time_type = #{timeType,jdbcType=INTEGER},
+      </if>
+      <if test="count != null">
+        `count` = #{count,jdbcType=INTEGER},
+      </if>
+      <if test="createBy != null">
+        create_by = #{createBy,jdbcType=INTEGER},
+      </if>
+      <if test="createAt != null">
+        create_at = #{createAt,jdbcType=INTEGER},
+      </if>
+      <if test="content != null">
+        content = #{content,jdbcType=LONGVARCHAR},
+      </if>
+    </set>
+    where id = #{id,jdbcType=INTEGER}
+  </update>
+  <update id="updateByPrimaryKeyWithBLOBs" parameterType="com.sl.gtgx.app_1.entity.Patrol">
+    update patrol
+    set patrol_point_id = #{patrolPointId,jdbcType=INTEGER},
+        `type` = #{type,jdbcType=INTEGER},
+      time_type = #{timeType,jdbcType=INTEGER},
+        `count` = #{count,jdbcType=INTEGER},
+      create_by = #{createBy,jdbcType=INTEGER},
+      create_at = #{createAt,jdbcType=INTEGER},
+      content = #{content,jdbcType=LONGVARCHAR}
+    where id = #{id,jdbcType=INTEGER}
+  </update>
+  <update id="updateByPrimaryKey" parameterType="com.sl.gtgx.app_1.entity.Patrol">
+    update patrol
+    set patrol_point_id = #{patrolPointId,jdbcType=INTEGER},
+        `type` = #{type,jdbcType=INTEGER},
+      time_type = #{timeType,jdbcType=INTEGER},
+        `count` = #{count,jdbcType=INTEGER},
+      create_by = #{createBy,jdbcType=INTEGER},
+      create_at = #{createAt,jdbcType=INTEGER}
+    where id = #{id,jdbcType=INTEGER}
+  </update>
+</mapper>
